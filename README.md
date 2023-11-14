@@ -20,6 +20,7 @@ Plotting:
 P1204 Modeling:
 
 * estimated_to_p1204.R: Utilizes "p1204_raw.csv" (containing P1204 scores per video) to produce "phase4_current_results_p1204.csv," a crucial file for modeling.
+
 Model Comparison:
 
 * mos_plots.R: Compares different models using AIC and coefficient comparison, creating relevant plots.
