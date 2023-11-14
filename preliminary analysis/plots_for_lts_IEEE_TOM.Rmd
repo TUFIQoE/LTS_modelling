@@ -1,0 +1,161 @@
+---
+title: "plots_for_lts_IEEE_TOM"
+output: html_document
+date: '2023-08-09'
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(ggplot2)
+library(RColorBrewer)
+```
+
+## R Markdown
+
+
+```{r cars}
+data_raw <- read_csv("data_for_plots.csv")
+data_raw$hour <- format(as.POSIXct(data_raw$date), format = "%H")
+data_raw$hour <- as.integer(data_raw$hour)
+time_categories <- c("Night", "Early Morning", "Morning", "Afternoon", "Evening")
+
+data_raw$TimeOfDay <- cut(
+  data_raw$hour,
+  breaks = c(0, 4, 8, 12, 18, 24),
+  labels = time_categories,
+  include.lowest = TRUE
+)
+
+ggplot(data_raw, aes(x = external_id, fill = TimeOfDay)) +
+  geom_bar(position = "dodge") +
+  labs(
+    x = "User ID",
+    y = "Frequency",
+    title = "Voting Time of Day by User"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+## Heatmap for watching times
+
+```{r watching_times, echo=FALSE}
+df <- read_csv("data_for_plots.csv")
+df$hour <- format(as.POSIXct(df$date), format = "%H:%M")
+df$hour <- gsub(":", ".", df$hour)
+df$hour <- as.numeric(df$hour)
+df$hour <- round(df$hour, digits = 0)
+df$hour[df$hour == 0] <- 24
+heatmap_data <- df %>%
+  group_by(external_id, hour) %>%
+  dplyr::summarize(Frequency = n())
+
+# Define color palette
+color_palette <- brewer.pal(9, "YlGnBu")
+
+# Create the heatmap
+p <- ggplot(heatmap_data, aes(x = external_id, y = hour, fill = Frequency)) +
+  geom_tile() +
+  scale_fill_gradientn(colors = color_palette, trans = "log", 
+  breaks = seq(1, max(heatmap_data$Frequency), by = 20)) +
+  labs(
+    x = "User ID",
+    y = "Hour of the Day"
+  ) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust=0.5)) +  scale_y_reverse(limits=c(24, 0), breaks = seq(0, 23, 3))
+
+ggsave(filename = "watching_hours.pdf", plot = p, width = 8, height = 6)
+print(p)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+## Heatmap for scores
+
+```{r scores, echo=FALSE}
+df <- read_csv("data_for_plots.csv")
+df$hour <- format(as.POSIXct(df$date), format = "%H")
+df$hour <- as.integer(df$hour)
+df <- df[complete.cases(df$q2),]
+
+heatmap_data <- df %>%
+  group_by(external_id, q2) %>%
+  dplyr::summarize(Frequency = n())
+
+# Define color palette
+color_palette <- brewer.pal(6, "Oranges")
+
+# Create the heatmap
+p <- ggplot(heatmap_data, aes(x = external_id, y = q2, fill = Frequency)) +
+  geom_tile() +
+  scale_fill_gradientn(colors = color_palette, trans = "log", 
+  breaks = seq(1, max(heatmap_data$Frequency), by = 4)) +
+  labs(
+    x = "User ID",
+    y = "Rating"
+  ) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust=0.5))
+ggsave(filename = "scores_distribution.pdf", plot = p, width = 8, height = 6)
+print(p)
+
+```
+
+## The 'reliable user' plot
+
+```{r plot}
+library(RColorBrewer)
+df_s <- read_csv("phase4_current_results.csv")
+
+filtered_df <- df_s %>%
+  filter(n == 7)
+
+mean_scores <- filtered_df %>%
+  group_by(week)  %>%
+  dplyr::summarize(mean_score = mean(q2, na.rm = TRUE))
+
+df_with_mean <- filtered_df %>%
+  left_join(mean_scores, by = "week")
+
+
+mean_correlation_per_user <- df_with_mean %>%
+  group_by(external_id) %>%
+  dplyr::summarize(mean_correlation = cor(q2, mean_score, use = "complete.obs"))
+
+#this is to get percentage of watched videos (there were 175 videos in total)
+
+#sum_watched_videos <- df_s %>%
+  #group_by(external_id) %>%
+  #dplyr::summarize(total_watched_videos = sum(n))
+
+#df_for_plot <- sum_watched_videos %>%
+  #left_join(mean_correlation_per_user, by = "external_id")
+
+#df_for_plot$perc <- df_for_plot$total_watched_videos/1.75 
+
+#this is to get number of fully watched weeks
+sum_watched_weeks <- filtered_df %>%
+  group_by(external_id) %>%
+  dplyr::summarize(total_watched_weeks = sum(n))
+
+df_for_plot <- sum_watched_weeks %>%
+  left_join(mean_correlation_per_user, by = "external_id")
+
+df_for_plot$weeks <- df_for_plot$total_watched_weeks/7 
+
+my_color_palette <- colorRampPalette(brewer.pal(9, "Blues"))(n = 100)
+
+p <- ggplot(df_for_plot, aes(x = external_id, y = mean_correlation, color = weeks)) +
+  geom_point() +
+  scale_color_gradientn(colors = my_color_palette) +
+  labs(x = "User ID", y = "Correlation") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 0.5, vjust=0.5), aspect.ratio = 0.5) +
+  guides(color = guide_colorbar(title = "Number of fully \n watched weeks", title.position = "top", title.hjust = 0.5, title.vjust = 0.5, wrap = TRUE))
+ggsave(filename = "correlation.pdf", plot = p, width = 8, height = 4)
+print(p)
+
+```
+
